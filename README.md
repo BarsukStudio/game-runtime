@@ -14,8 +14,8 @@ These are the rules that decide what may live here at all:
 - No SDK, Capacitor, portal or framework imports.
 - No implicit `window`, `document`, `localStorage` or `fetch`. Environment
   arrives through parameters.
-- Timers are injectable (`setTimeoutFn` / `clearTimeoutFn`); the only fallback is
-  `globalThis.setTimeout`, never a DOM timer.
+- Timers are injected (`setTimeoutFn` / `clearTimeoutFn`) and required — no
+  module here ever reaches for an ambient `setTimeout`.
 - Every module ships with its own tests and its own subpath export.
 
 What never leaves a game: reward amounts, product and ad ids, shop UI, rewarded
@@ -23,8 +23,17 @@ placements, interstitial policy, the back ladder, saves, translations.
 
 ## Install
 
-```bash
-npm i github:BarsukStudio/game-runtime#<exact-sha>
+Pin an exact commit as a tarball URL — the same form the studio already uses for
+`capacitor-plugin-yandex-ads`. The `github:owner/repo#sha` shorthand resolves to
+`git+ssh://` and needs an SSH key on the machine doing the install, so it is not
+used here.
+
+```json
+{
+  "dependencies": {
+    "@barsuk/game-runtime": "https://github.com/BarsukStudio/game-runtime/archive/<exact-sha>.tar.gz"
+  }
+}
 ```
 
 ## Modules
@@ -45,7 +54,9 @@ import {
 const coordinator = createPurchaseFinishCoordinator({
   store: CdvPurchase.store,
   finishedState: CdvPurchase.TransactionState.FINISHED,
-  // timeoutMs, setTimeoutFn, clearTimeoutFn are optional.
+  // Timers are required; timeoutMs is optional (30 s default).
+  setTimeoutFn: (callback, ms) => window.setTimeout(callback, ms),
+  clearTimeoutFn: (handle) => window.clearTimeout(handle),
 });
 
 // Skip the coordinator when the store has already settled the transaction.
@@ -55,6 +66,8 @@ if (!isSettledStoreTransaction(transaction, { finishedState, consumable })) {
 ```
 
 - `createPurchaseFinishCoordinator(options)` → `{ finish, dispose, pendingCount }`.
+  Throws at construction when the store cannot be subscribed to or when either
+  timer is missing.
   `finish(transaction)` resolves only after the store emits its `finished` event
   for that transaction, rejects on a store error, and rejects after `timeoutMs`
   (default 30 s) if no confirmation arrives. Concurrent calls for the same
@@ -73,6 +86,10 @@ ledger, and only then finish the transaction.
 ## Development
 
 ```bash
-npm test    # node --test, no dependencies
+npm test    # node --test autodiscovery, no dependencies
 npm pack --dry-run
 ```
+
+Node 20 is the floor (`engines`), so the test script uses plain autodiscovery: a
+quoted glob argument only works from Node 22 on. Agents working in this repo
+read `AGENTS.md` first.

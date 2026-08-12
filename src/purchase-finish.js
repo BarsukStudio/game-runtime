@@ -9,8 +9,9 @@
  * fires.
  *
  * The module is headless on purpose: no SDK import, no Capacitor, no DOM, no
- * storage. The store object arrives as a duck-typed dependency, timers can be
- * injected, and nothing here knows about products, prices or entitlements.
+ * storage, and no ambient timers. The store object arrives as a duck-typed
+ * dependency, the caller injects the timers, and nothing here knows about
+ * products, prices or entitlements.
  *
  * @module @barsuk/game-runtime/purchase-finish
  */
@@ -87,10 +88,10 @@ function getTransactionKey(transaction) {
  *   Duck-typed store: `when().finished()` to subscribe, `off()` to unsubscribe.
  * @property {string} [finishedState='finished'] The store's terminal state value.
  * @property {number} [timeoutMs=30000] Confirmation budget, clamped to >= 1.
- * @property {(callback: () => void, ms: number) => unknown} [setTimeoutFn]
- *   Timer injection point; defaults to `globalThis.setTimeout`.
- * @property {(handle: unknown) => void} [clearTimeoutFn]
- *   Timer injection point; defaults to `globalThis.clearTimeout`.
+ * @property {(callback: () => void, ms: number) => unknown} setTimeoutFn
+ *   Required. The library never reaches for an ambient timer.
+ * @property {(handle: unknown) => void} clearTimeoutFn
+ *   Required. Must cancel a handle produced by `setTimeoutFn`.
  */
 
 /**
@@ -106,7 +107,7 @@ function getTransactionKey(transaction) {
  *
  * @param {PurchaseFinishCoordinatorOptions} [options]
  * @returns {PurchaseFinishCoordinator}
- * @throws {Error} When the store cannot be subscribed to.
+ * @throws {Error} When the store cannot be subscribed to, or timers are missing.
  */
 export function createPurchaseFinishCoordinator(options = {}) {
   const store = options.store;
@@ -114,12 +115,17 @@ export function createPurchaseFinishCoordinator(options = {}) {
   const timeoutMs = Number.isFinite(options.timeoutMs)
     ? Math.max(1, options.timeoutMs)
     : DEFAULT_FINISH_TIMEOUT_MS;
-  const setTimeoutFn = options.setTimeoutFn ?? globalThis.setTimeout;
-  const clearTimeoutFn = options.clearTimeoutFn ?? globalThis.clearTimeout;
+  const { setTimeoutFn, clearTimeoutFn } = options;
   const pending = new Map();
 
   if (!store?.when || !store?.off) {
     throw new Error('Purchase finish coordinator requires store.when() and store.off().');
+  }
+  // Timers are a dependency, never an ambient global: a game embeds this in a
+  // WebView, a test drives it on a fake clock, and neither may depend on which
+  // setTimeout happens to be reachable from the module.
+  if (typeof setTimeoutFn !== 'function' || typeof clearTimeoutFn !== 'function') {
+    throw new Error('Purchase finish coordinator requires setTimeoutFn and clearTimeoutFn.');
   }
 
   /**
@@ -132,7 +138,7 @@ export function createPurchaseFinishCoordinator(options = {}) {
     const entry = key ? pending.get(key) : null;
     if (!entry) return false;
     pending.delete(key);
-    clearTimeoutFn?.(entry.timeoutId);
+    clearTimeoutFn(entry.timeoutId);
     if (error) entry.reject(error);
     else entry.resolve(transaction);
     return true;
@@ -194,7 +200,7 @@ export function createPurchaseFinishCoordinator(options = {}) {
   function dispose() {
     store.off(onFinished);
     for (const entry of pending.values()) {
-      clearTimeoutFn?.(entry.timeoutId);
+      clearTimeoutFn(entry.timeoutId);
       entry.reject(new Error('Purchase finish coordinator disposed.'));
     }
     pending.clear();

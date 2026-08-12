@@ -16,7 +16,7 @@
     "src"
   ],
   "scripts": {
-    "test": "node --test --test-timeout=10000 \"test/**/*.test.js\""
+    "test": "node --test --test-timeout=10000"
   },
   "repository": {
     "type": "git",

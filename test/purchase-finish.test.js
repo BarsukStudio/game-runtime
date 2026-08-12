@@ -1,8 +1,13 @@
 // Merged from the two consumers of this logic: Muscle Clicker's
 // scripts/purchase-wiring-contract-test.mjs (canonical source) and Ball Launch's
 // scripts/purchase-finish-test.mjs + purchase-ownership-settlement-test.mjs.
-// Store-specific behaviour asserted here is real: the Google Play / App Store
-// shapes come from what those games observed on device.
+//
+// The transaction shapes below are modelled on cordova-plugin-purchase's own
+// state mapping (GooglePlay.Transaction.toState(), PurchasePlugin.java), not on
+// a device QA pass — neither game has device-verified purchases end to end
+// (Muscle Clicker's PROJECT_STATUS.md, Ball Launch's pending iOS sandbox rows).
+// These tests pin the coordinator's behaviour for a given transaction shape;
+// which shapes a real store emits is still an open verification item.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -145,6 +150,32 @@ test('a store without when()/off() is rejected at construction', () => {
   assert.throws(
     () => createPurchaseFinishCoordinator({ store: { when() {} } }),
     /requires store\.when\(\) and store\.off\(\)/,
+  );
+});
+
+// The library must never reach for an ambient setTimeout — a missing timer is a
+// wiring bug in the game, and it has to surface at construction, not as a finish
+// that silently never times out.
+test('timers are a required dependency', () => {
+  const harness = createStoreHarness();
+  const missingTimers = /requires setTimeoutFn and clearTimeoutFn/;
+
+  assert.throws(() => createPurchaseFinishCoordinator({ store: harness.store }), missingTimers);
+  assert.throws(
+    () => createPurchaseFinishCoordinator({ store: harness.store, setTimeoutFn: harness.setTimeoutFn }),
+    missingTimers,
+  );
+  assert.throws(
+    () => createPurchaseFinishCoordinator({ store: harness.store, clearTimeoutFn: harness.clearTimeoutFn }),
+    missingTimers,
+  );
+  assert.throws(
+    () => createPurchaseFinishCoordinator({
+      store: harness.store,
+      setTimeoutFn: harness.setTimeoutFn,
+      clearTimeoutFn: 1,
+    }),
+    missingTimers,
   );
 });
 
@@ -393,12 +424,14 @@ test('dispose unsubscribes, clears timers and rejects everything pending', async
   assert.deepEqual(harness.clearedHandles, [1], 'the pending timeout must be cleared');
 });
 
-test('the coordinator works with the platform timers when none are injected', async () => {
+test('the coordinator works with the host platform timers', async () => {
   const harness = createStoreHarness();
   const coordinator = createPurchaseFinishCoordinator({
     store: harness.store,
     finishedState: FINISHED,
     timeoutMs: 20,
+    setTimeoutFn: (callback, ms) => setTimeout(callback, ms),
+    clearTimeoutFn: (handle) => clearTimeout(handle),
   });
   const transaction = approvedTransaction({ transactionId: 'real-timers' });
 
