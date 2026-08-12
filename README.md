@@ -24,9 +24,11 @@ placements, interstitial policy, the back ladder, saves, translations.
 ## Install
 
 Pin an exact commit as a tarball URL — the same form the studio already uses for
-`capacitor-plugin-yandex-ads`. The `github:owner/repo#sha` shorthand resolves to
-`git+ssh://` and needs an SSH key on the machine doing the install, so it is not
-used here.
+`capacitor-plugin-yandex-ads`. The `github:owner/repo#sha` shorthand is avoided
+on purpose: it is recorded in the lockfile as `git+ssh://`, so every install
+needs git and depends on whatever ssh-to-https fallback that machine happens to
+have, and npm skips the integrity check for a git dependency. The tarball is a
+plain HTTPS artifact whose integrity hash is pinned in the lockfile.
 
 ```json
 {

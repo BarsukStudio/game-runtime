@@ -5,7 +5,8 @@ modules, no build step, no runtime dependencies, no dev dependencies. This file
 is the contract for every agent and contributor working here.
 
 The games are the source, this repo is the destination: logic arrives here by
-extraction from a game that already ships it, never by being invented here.
+extraction from a game that already carries and independently tests it, never by
+being invented here.
 
 ## Hard rules
 
@@ -34,8 +35,13 @@ extraction from a game that already ships it, never by being invented here.
 
 ```bash
 npm test              # node --test autodiscovery, Node >= 20
-npm pack --dry-run    # what a consumer actually gets
+npm pack --dry-run    # the `files` whitelist, i.e. an npm-registry tarball
 ```
+
+`npm pack` is not what a consumer installs today: a GitHub archive URL ships the
+whole tree, `files` and `.gitignore` do not filter it, so `AGENTS.md` and `test/`
+land in the consumer's `node_modules` too. Harmless — no dependencies, nothing
+imported — but do not treat the pack output as the delivered artifact.
 
 Node 20 is the floor declared in `engines`, so keep the test script on
 autodiscovery: a quoted glob positional argument only works from Node 22 on.
@@ -49,7 +55,9 @@ Games pin an exact commit as a tarball URL:
 "@barsuk/game-runtime": "https://github.com/BarsukStudio/game-runtime/archive/<sha>.tar.gz"
 ```
 
-`github:owner/repo#sha` resolves to `git+ssh://` and fails without an SSH key.
+Not `github:owner/repo#sha`: it is recorded in the lockfile as `git+ssh://`, so
+the install needs git and leans on that machine's ssh-to-https fallback, and npm
+skips the integrity check for a git dependency.
 
 Nothing is published to npm (`private: true`) and no version is tagged yet. Do
 not publish, do not tag, and do not pick a licence without asking — both are
