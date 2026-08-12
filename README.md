@@ -1,0 +1,78 @@
+# @barsuk/game-runtime
+
+Headless runtime logic shared by Barsuk Studio games (Muscle Clicker, Ball
+Launch, …). Plain ES modules, no build step, no dependencies.
+
+**Status: unreleased.** Nothing is published to npm and no version is tagged yet.
+Consumers pin an exact commit SHA until `v0.1.0` exists.
+
+## Rules
+
+These are the rules that decide what may live here at all:
+
+- No game ids, no economy, no reward amounts, no product or ad ids, no UI.
+- No SDK, Capacitor, portal or framework imports.
+- No implicit `window`, `document`, `localStorage` or `fetch`. Environment
+  arrives through parameters.
+- Timers are injectable (`setTimeoutFn` / `clearTimeoutFn`); the only fallback is
+  `globalThis.setTimeout`, never a DOM timer.
+- Every module ships with its own tests and its own subpath export.
+
+What never leaves a game: reward amounts, product and ad ids, shop UI, rewarded
+placements, interstitial policy, the back ladder, saves, translations.
+
+## Install
+
+```bash
+npm i github:BarsukStudio/game-runtime#<exact-sha>
+```
+
+## Modules
+
+### `@barsuk/game-runtime/purchase-finish`
+
+Confirmed finishing of store transactions for cordova-plugin-purchase style
+stores. `transaction.finish()` resolves when the call has been *dispatched*, not
+when the store has *settled* the transaction; delivery that trusts that promise
+reports success while the purchase is still open.
+
+```js
+import {
+  createPurchaseFinishCoordinator,
+  isSettledStoreTransaction,
+} from '@barsuk/game-runtime/purchase-finish';
+
+const coordinator = createPurchaseFinishCoordinator({
+  store: CdvPurchase.store,
+  finishedState: CdvPurchase.TransactionState.FINISHED,
+  // timeoutMs, setTimeoutFn, clearTimeoutFn are optional.
+});
+
+// Skip the coordinator when the store has already settled the transaction.
+if (!isSettledStoreTransaction(transaction, { finishedState, consumable })) {
+  await coordinator.finish(transaction);
+}
+```
+
+- `createPurchaseFinishCoordinator(options)` → `{ finish, dispose, pendingCount }`.
+  `finish(transaction)` resolves only after the store emits its `finished` event
+  for that transaction, rejects on a store error, and rejects after `timeoutMs`
+  (default 30 s) if no confirmation arrives. Concurrent calls for the same
+  `platform:transactionId` share one pending confirmation. `dispose()`
+  unsubscribes and rejects everything still pending.
+- `isSettledStoreTransaction(transaction, { finishedState, consumable })` — true
+  when the store itself already settled the transaction. A non-consumable counts
+  as settled once acknowledged (Google Play keeps an acknowledged one in
+  `APPROVED` forever and short-circuits `finish()`), a consumable only once
+  consumed — acknowledgement is not consumption, and skipping `finish()` there
+  would leave the product unbuyable and eventually refunded.
+
+The order around it belongs to the game: grant the product, write the delivery
+ledger, and only then finish the transaction.
+
+## Development
+
+```bash
+npm test    # node --test, no dependencies
+npm pack --dry-run
+```

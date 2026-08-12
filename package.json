@@ -1,0 +1,26 @@
+{
+  "name": "@barsuk/game-runtime",
+  "version": "0.1.0",
+  "description": "Headless, game-agnostic runtime logic shared by Barsuk Studio games",
+  "type": "module",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    "./purchase-finish": "./src/purchase-finish.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "node --test --test-timeout=10000 \"test/**/*.test.js\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BarsukStudio/game-runtime.git"
+  },
+  "sideEffects": false
+}
