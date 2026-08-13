@@ -60,8 +60,9 @@ the install needs git and leans on that machine's ssh-to-https fallback, and npm
 skips the integrity check for a git dependency.
 
 Nothing is published to npm (`private: true`) and no version is tagged yet. Do
-not publish, do not tag, and do not pick a licence without asking — both are
-release decisions, not implementation details.
+not publish and do not tag — those are release decisions, not implementation
+details. The licence is settled: MIT, chosen by Oleg; `private: true` stays,
+since the package is consumed by SHA and not from the registry.
 
 ## Style
 
