@@ -3,8 +3,14 @@
 Headless runtime logic shared by Barsuk Studio games (Muscle Clicker, Ball
 Launch, …). Plain ES modules, no build step, no dependencies.
 
-**Status: unreleased.** Nothing is published to npm and no version is tagged yet.
-Consumers pin an exact commit SHA until `v0.1.0` exists.
+**Status: released — `v0.1.0` (`2fa65e8`), 2026-08-14.** The tag marks the first
+runtime proven by two consumers: Muscle Clicker and Ball Launch both resolve that
+commit, pass their purchase suites from clean installs, and Ball's Remove Ads and
+Restore are device-verified on Android and iOS.
+
+Nothing is published to npm, and consumers stay pinned to the exact commit SHA
+rather than the tag: the tarball URL is what carries an integrity hash into the
+lockfile. The tag names a proven commit; it is not an install target.
 
 ## Rules
 

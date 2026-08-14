@@ -59,10 +59,11 @@ Not `github:owner/repo#sha`: it is recorded in the lockfile as `git+ssh://`, so
 the install needs git and leans on that machine's ssh-to-https fallback, and npm
 skips the integrity check for a git dependency.
 
-Nothing is published to npm (`private: true`) and no version is tagged yet. Do
-not publish and do not tag — those are release decisions, not implementation
-details. The licence is settled: MIT, chosen by Oleg; `private: true` stays,
-since the package is consumed by SHA and not from the registry.
+Nothing is published to npm (`private: true`). `v0.1.0` is tagged on `2fa65e8`;
+do not publish and do not add further tags — those are release decisions, not
+implementation details. The licence is settled: MIT, chosen by Oleg;
+`private: true` stays, since the package is consumed by SHA and not from the
+registry.
 
 ## Style
 
