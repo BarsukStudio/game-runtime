@@ -9,6 +9,7 @@
     "node": ">=20"
   },
   "exports": {
+    "./purchase-delivery": "./src/purchase-delivery.js",
     "./purchase-finish": "./src/purchase-finish.js",
     "./package.json": "./package.json"
   },

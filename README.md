@@ -46,6 +46,47 @@ plain HTTPS artifact whose integrity hash is pinned in the lockfile.
 
 ## Modules
 
+### `@barsuk/game-runtime/purchase-delivery`
+
+The order in which one approved-and-verified transaction becomes a delivered
+product, and the two rules that order exists to enforce: a transaction is
+finished only after its product was granted or an earlier delivery of it was
+confirmed, and a transaction whose delivery could not be completed is left
+unfinished so the store replays it.
+
+```js
+import { deliverPurchaseTransaction } from '@barsuk/game-runtime/purchase-delivery';
+
+const settled = await deliverPurchaseTransaction(transaction, {
+  // All four are required; a missing one throws before the transaction is read.
+  isDelivered: (transactionId) => ledger.includes(transactionId),
+  grant: (productId, transactionId) => game.grant(productId, transactionId),
+  mirror: (transactionId) => ledger.mirror(transactionId),
+  finish: (approved) => coordinator.finish(approved),
+  // Both optional.
+  onDelivered: ({ transactionId, productId }) => session?.noteDelivered({ transactionId, productId }),
+  onWarn: (message, detail) => console.warn(message, detail),
+});
+```
+
+- `deliverPurchaseTransaction(transaction, handlers)` → `Promise<boolean>`. True
+  when the transaction is settled and its product accounted for; false when it
+  was deliberately left recoverable — pending at the store, carrying no product
+  or transaction id, unable to be finished, or naming a product the game does not
+  sell. Every one of those is a decision to let the store replay it, not an error
+  swallowed. Throws when `isDelivered`, `grant`, `mirror` or `finish` is missing,
+  before anything is read or granted; a throw from `grant` or `finish` propagates,
+  because by then the product may already be granted.
+- `getTransactionProductId(transaction)` and `getTransactionDeliveryId(transaction)`
+  → the plugin's contract fields, trimmed, or `''`. One reading of transaction
+  identity, so a consumer does not grow a second.
+
+`grant` must persist the product and the transaction id in a single write: the
+ledger lookup is what stops a replay from granting twice, and a grant recorded
+without its id cannot be found again. The module reads an SDK-shaped transaction
+(`products[0].id`, `transactionId`, `isPending`, `finish`) — cordova-plugin-purchase's
+shape. Headless it is; store-agnostic it does not claim to be.
+
 ### `@barsuk/game-runtime/purchase-finish`
 
 Confirmed finishing of store transactions for cordova-plugin-purchase style
@@ -88,8 +129,8 @@ if (!isSettledStoreTransaction(transaction, { finishedState, consumable })) {
   consumed — acknowledgement is not consumption, and skipping `finish()` there
   would leave the product unbuyable and eventually refunded.
 
-The order around it belongs to the game: grant the product, write the delivery
-ledger, and only then finish the transaction.
+The order around it is `purchase-delivery` above: grant the product, write the
+delivery ledger, and only then finish the transaction.
 
 ## Development
 
