@@ -46,6 +46,68 @@ plain HTTPS artifact whose integrity hash is pinned in the lockfile.
 
 ## Modules
 
+### `@barsuk/game-runtime/ad-lifecycle`
+
+The load/show/reward state machine an ad format is driven through, and the one
+thing it guarantees: exactly one terminal outcome per attempt, whatever the
+provider emits. A provider can answer one load twice, deliver a reward after the
+dismissal, or go silent between the show call and the presentation — each phase
+carries a watchdog, so a silent provider still ends the attempt instead of
+leaving the game paused behind an ad that never appeared.
+
+Passive by design: it calls no SDK and shows nothing. The caller reports what the
+provider did and reacts to what comes back.
+
+```js
+import {
+  AD_PRESENTATION_TIMEOUT_MS,
+  AD_LATE_REWARD_GRACE_MS,
+  createAdLifecycle,
+} from '@barsuk/game-runtime/ad-lifecycle';
+
+const rewarded = createAdLifecycle({
+  name: 'Rewarded ad',
+  // Required; a missing one throws at construction.
+  setTimeoutFn: (handler, delayMs) => window.setTimeout(handler, delayMs),
+  clearTimeoutFn: (timer) => window.clearTimeout(timer),
+  // Every budget may be a number or a function returning one, because the right
+  // budget can depend on a provider chosen at init.
+  presentationTimeoutMs: () => (isPortal() ? 15000 : AD_PRESENTATION_TIMEOUT_MS),
+  lateRewardGraceMs: () => (mayRewardAfterDismissal() ? AD_LATE_REWARD_GRACE_MS : 0),
+  // Every entry optional.
+  callbacks: {
+    onLoaded: (payload) => game.onRewardedLoaded(payload),
+    onLoadFailed: (error) => game.onRewardedLoadFailed(error),
+    onShown: () => game.onRewardedShown(),
+    onShowFailed: (error) => game.onRewardedShowFailed(error),
+    onClosed: () => game.onRewardedClosed(),
+    onRewarded: (payload) => game.onRewardedComplete(payload),
+  },
+});
+```
+
+- `createAdLifecycle(options)` → the eight methods a caller reports through:
+  `beginLoad`, `loadSucceeded`, `loadFailed`, `beginShow`, `showStarted`,
+  `showFailed`, `showClosed`, `rewardEarned`. Each returns whether it owned the
+  signal it was given. `false` means the machine was in a phase where that signal
+  has no meaning — a duplicate, or one belonging to an attempt already over — and
+  is never a terminal outcome of its own: a refused `beginShow()` does not mean
+  the show failed, because the attempt already in flight still reports one.
+  Throws when `setTimeoutFn` or `clearTimeoutFn` is missing.
+- `AD_LOAD_TIMEOUT_MS`, `AD_PRESENTATION_TIMEOUT_MS`, `AD_DISMISSAL_TIMEOUT_MS`,
+  `AD_LATE_REWARD_GRACE_MS` — the default budgets, exported so a caller can
+  reason about them rather than restate them.
+
+`lateRewardGraceMs` is how a caller says which order its provider uses. A
+provider may report the reward before the dismissal or after it, and the module
+is not told which: with a zero window a dismissal closes the show at once, and
+with a non-zero one the close is held open just long enough for a reward still on
+its way — the grant of a fully watched ad. Paid on every close without a reward,
+so it belongs only where the later order is actually possible.
+
+Ad units, placements, reward amounts and the policy about when an ad is
+appropriate stay in the game.
+
 ### `@barsuk/game-runtime/purchase-delivery`
 
 The order in which one approved-and-verified transaction becomes a delivered
