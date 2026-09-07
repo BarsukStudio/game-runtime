@@ -1,6 +1,6 @@
 {
   "name": "@barsuk/game-runtime",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Headless, game-agnostic runtime logic shared by Barsuk Studio games",
   "type": "module",
   "private": true,
@@ -12,7 +12,8 @@
     "./ad-lifecycle": "./src/ad-lifecycle.js",
     "./purchase-delivery": "./src/purchase-delivery.js",
     "./purchase-finish": "./src/purchase-finish.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./ad-attempt-scope": "./src/ad-attempt-scope.js"
   },
   "files": [
     "src"

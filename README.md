@@ -204,3 +204,17 @@ npm pack --dry-run
 Node 20 is the floor (`engines`), so the test script uses plain autodiscovery: a
 quoted glob argument only works from Node 22 on. Agents working in this repo
 read `AGENTS.md` first.
+
+### `@barsuk/game-runtime/ad-attempt-scope`
+
+`withAdAttemptScopes(createAdLifecycle, options)` wraps the injected lifecycle
+factory with `captureLoad()` and `captureShow()` handles. Capture once when
+issuing an SDK request, before awaiting it or registering its callbacks. Handles
+return `false` after their own attempt ends, even if a retry has already begun.
+`isCurrent()` also guards provider side effects outside the lifecycle.
+
+Extracted from Gym (the source fix was committed before extraction). Scope
+invalidation precedes consumer callbacks so synchronous retries remain valid.
+Reward handles stay valid during the configured late-reward grace window.
+Untagged global native SDK events still use the original lifecycle signals;
+this API cannot recover an attempt identity that the transport does not supply.
