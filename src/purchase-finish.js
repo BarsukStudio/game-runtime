@@ -133,10 +133,10 @@ export function createPurchaseFinishCoordinator(options = {}) {
    * @param {Error | null} [error]
    * @returns {boolean} True when a pending entry was settled.
    */
-  function settle(transaction, error = null) {
+  function settle(transaction, error = null, expectedEntry) {
     const key = getTransactionKey(transaction);
     const entry = key ? pending.get(key) : null;
-    if (!entry) return false;
+    if (!entry || (expectedEntry && entry !== expectedEntry)) return false;
     pending.delete(key);
     clearTimeoutFn(entry.timeoutId);
     if (error) entry.reject(error);
@@ -172,26 +172,27 @@ export function createPurchaseFinishCoordinator(options = {}) {
       resolvePromise = resolve;
       rejectPromise = reject;
     });
-    const timeoutId = setTimeoutFn(() => {
+    const entry = { transaction, promise, resolve: resolvePromise, reject: rejectPromise, timeoutId: null };
+    entry.timeoutId = setTimeoutFn(() => {
       if (String(transaction.state ?? '') === finishedState) {
-        settle(transaction);
+        settle(transaction, null, entry);
         return;
       }
-      settle(transaction, new Error(`Purchase finish confirmation timed out for ${key}.`));
+      settle(transaction, new Error(`Purchase finish confirmation timed out for ${key}.`), entry);
     }, timeoutMs);
-    pending.set(key, {
-      transaction,
-      promise,
-      resolve: resolvePromise,
-      reject: rejectPromise,
-      timeoutId,
-    });
+    pending.set(key, entry);
 
+    // Dispatch must never hold the confirmation deadline hostage. Its result
+    // belongs to this entry, not a retry with the same store transaction id.
     try {
-      await transaction.finish();
-      if (String(transaction.state ?? '') === finishedState) settle(transaction);
+      Promise.resolve(transaction.finish()).then(
+        () => {
+          if (String(transaction.state ?? '') === finishedState) settle(transaction, null, entry);
+        },
+        (error) => settle(transaction, error, entry),
+      );
     } catch (error) {
-      settle(transaction, error);
+      settle(transaction, error, entry);
     }
     return promise;
   }

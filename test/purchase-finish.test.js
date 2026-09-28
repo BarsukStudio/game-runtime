@@ -439,3 +439,51 @@ test('the coordinator works with the host platform timers', async () => {
   assert.equal(coordinator.pendingCount(), 0);
   coordinator.dispose();
 });
+
+for (const outcome of ['finished', 'timeout', 'dispose']) {
+  test(`a pending dispatch cannot block ${outcome}`, async () => {
+    const harness = createStoreHarness();
+    const coordinator = harness.create();
+    const transaction = approvedTransaction({ finish: () => new Promise(() => {}) });
+    const result = coordinator.finish(transaction);
+    if (outcome === 'finished') {
+      harness.finishedCallback(transaction);
+      assert.equal(await result, transaction);
+    } else {
+      const rejected = assert.rejects(result, outcome === 'timeout' ? /timed out/ : /disposed/);
+      if (outcome === 'timeout') harness.timeoutCallback();
+      else coordinator.dispose();
+      await rejected;
+    }
+    assert.equal(coordinator.pendingCount(), 0);
+  });
+}
+
+test('a synchronous dispatch throw rejects the observed confirmation', async () => {
+  const harness = createStoreHarness();
+  const coordinator = harness.create();
+  await assert.rejects(coordinator.finish(approvedTransaction({ finish() { throw new Error('sync'); } })), /sync/);
+  assert.equal(coordinator.pendingCount(), 0);
+});
+
+for (const response of ['resolve', 'reject']) {
+  test(`late dispatch ${response} cannot settle a retry`, async () => {
+    const harness = createStoreHarness();
+    const coordinator = harness.create();
+    let resolveOld, rejectOld;
+    const old = approvedTransaction({ finish: () => new Promise((resolve, reject) => { resolveOld = resolve; rejectOld = reject; }) });
+    const first = coordinator.finish(old);
+    const rejected = assert.rejects(first, /timed out/);
+    harness.timeoutCallback();
+    await rejected;
+    const retry = approvedTransaction();
+    const next = coordinator.finish(retry);
+    old.state = FINISHED;
+    if (response === 'resolve') resolveOld();
+    else rejectOld(new Error('stale dispatch'));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(coordinator.pendingCount(), 1);
+    harness.finishedCallback(retry);
+    assert.equal(await next, retry);
+  });
+}
