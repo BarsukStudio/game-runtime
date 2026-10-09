@@ -86,7 +86,7 @@ const rewarded = createAdLifecycle({
 });
 ```
 
-- `createAdLifecycle(options)` → the eight methods a caller reports through:
+- `createAdLifecycle(options)` → the attempt methods a caller reports through:
   `beginLoad`, `loadSucceeded`, `loadFailed`, `beginShow`, `showStarted`,
   `showFailed`, `showClosed`, `rewardEarned`. Each returns whether it owned the
   signal it was given. `false` means the machine was in a phase where that signal
@@ -94,6 +94,13 @@ const rewarded = createAdLifecycle({
   is never a terminal outcome of its own: a refused `beginShow()` does not mean
   the show failed, because the attempt already in flight still reports one.
   Throws when `setTimeoutFn` or `clearTimeoutFn` is missing.
+- `setAvailability(available, payload)` (0.2.2) reports inventory from an SDK
+  that owns Autoload. It retires any pending load watchdog and notifies
+  `onLoaded` or `onLoadFailed` when availability changes or a load was waiting.
+  Repeated identical signals return false. It never changes the current show,
+  its watchdogs or reward identity. Consuming one ad clears readiness; inventory
+  loaded during its presentation survives the presentation's terminal outcome.
+  Existing attempt-driven providers keep their original behavior.
 - `AD_LOAD_TIMEOUT_MS`, `AD_PRESENTATION_TIMEOUT_MS`, `AD_DISMISSAL_TIMEOUT_MS`,
   `AD_LATE_REWARD_GRACE_MS` — the default budgets, exported so a caller can
   reason about them rather than restate them.

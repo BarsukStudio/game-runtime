@@ -100,3 +100,23 @@ test('capture before any attempt is inert', () => {
   assert.equal(show.isCurrent(), false);
   assert.equal(show.rewardEarned(), false);
 });
+
+test('SDK availability retires the waiting load without retiring an active show', () => {
+  const f = fixture();
+  f.lifecycle.beginLoad();
+  const load = f.lifecycle.captureLoad();
+  f.lifecycle.setAvailability(true);
+  assert.equal(load.isCurrent(), false);
+  f.lifecycle.beginShow();
+  const show = f.lifecycle.captureShow();
+  f.lifecycle.setAvailability(false);
+  assert.equal(show.isCurrent(), true);
+  assert.equal(load.loadSucceeded(), false);
+  assert.equal(show.rewardEarned(), true);
+  f.lifecycle.setAvailability(true);
+  show.showClosed();
+  assert.equal(f.lifecycle.beginShow(), true);
+  assert.equal(show.rewardEarned(), false);
+  assert.equal(f.lifecycle.captureShow().rewardEarned(), true);
+  assert.equal(f.events.filter(event => event === 'reward').length, 2);
+});

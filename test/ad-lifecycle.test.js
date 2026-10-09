@@ -97,6 +97,64 @@ function createSubject(options = {}) {
   return { lifecycle, clock, events, load };
 }
 
+test('SDK availability can withdraw loaded inventory and recover without a load attempt', () => {
+  const { lifecycle, clock, events, load } = createSubject();
+  load();
+  assert.equal(lifecycle.setAvailability(false, new Error('expired')), true);
+  assert.equal(lifecycle.setAvailability(false), false);
+  assert.equal(lifecycle.beginShow(), false);
+  assert.deepEqual(events, ['loadFailed', 'showFailed']);
+  assert.equal(clock.armed(), 0);
+  assert.equal(lifecycle.setAvailability(true), true);
+  assert.equal(lifecycle.setAvailability(true), false);
+  assert.equal(lifecycle.beginShow(), true);
+});
+
+test('availability settles a waiting load and retires its watchdog', () => {
+  const { lifecycle, clock, events } = createSubject();
+  lifecycle.beginLoad();
+  assert.equal(lifecycle.setAvailability(false), true);
+  assert.equal(clock.armed(), 0);
+  clock.advance(AD_LOAD_TIMEOUT_MS);
+  assert.deepEqual(events, ['loadFailed']);
+  assert.equal(lifecycle.loadSucceeded(), false);
+  lifecycle.setAvailability(true);
+  assert.equal(lifecycle.beginShow(), true);
+});
+
+for (const outcome of ['showClosed', 'showFailed']) {
+  test(`SDK refill and failure preserve the active reward and next inventory through ${outcome}`, () => {
+    const { lifecycle, events, load } = createSubject();
+    load();
+    lifecycle.beginShow();
+    lifecycle.showStarted();
+    lifecycle.setAvailability(true);
+    lifecycle.setAvailability(false);
+    assert.equal(lifecycle.rewardEarned('earned'), true);
+    assert.equal(lifecycle.rewardEarned('duplicate'), false);
+    assert.equal(lifecycle.beginShow(), false);
+    lifecycle.setAvailability(true);
+    lifecycle[outcome](new Error('terminal'));
+    assert.equal(events.filter(event => Array.isArray(event) && event[0] === 'rewarded').length, 1);
+    assert.equal(events.filter(event => event === 'closed').length, 1);
+    assert.equal(lifecycle.beginShow(), true);
+  });
+}
+
+test('availability does not end a pending show or its late reward window', () => {
+  const { lifecycle, clock, events, load } = createSubject({ lateRewardGraceMs: 600 });
+  load();
+  lifecycle.beginShow();
+  lifecycle.setAvailability(false);
+  assert.equal(clock.armed(), 1);
+  lifecycle.showStarted();
+  lifecycle.showClosed();
+  lifecycle.setAvailability(true);
+  assert.equal(lifecycle.rewardEarned('late'), true);
+  assert.equal(events.filter(event => event === 'closed').length, 1);
+  assert.equal(lifecycle.beginShow(), true);
+});
+
 test('the timers are required at construction', () => {
   // Timers are a dependency, never an ambient global. A lifecycle that fell back
   // to whatever setTimeout its module can reach would look correct in this suite

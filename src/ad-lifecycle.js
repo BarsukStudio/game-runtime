@@ -75,6 +75,7 @@ export const AD_LATE_REWARD_GRACE_MS = 600;
  * @property {() => boolean} beginLoad Opens a load attempt and arms its watchdog.
  * @property {(payload?: unknown) => boolean} loadSucceeded Reports a loaded ad.
  * @property {(error: unknown) => boolean} loadFailed Reports a failed load attempt.
+ * @property {(available: boolean, payload?: unknown) => boolean} setAvailability Updates SDK-managed inventory without changing the current show or reward.
  * @property {() => boolean} beginShow Claims the machine for one show attempt.
  * @property {() => boolean} showStarted Reports that the provider presented the ad.
  * @property {(error: unknown) => boolean} showFailed Reports a show that cannot complete.
@@ -128,6 +129,7 @@ export function createAdLifecycle({
   const state = {
     loading: false,
     ready: false,
+    availabilityManaged: false,
     showPhase: 'idle',
     rewardDelivered: false,
     loadTimer: null,
@@ -171,6 +173,19 @@ export function createAdLifecycle({
     return true;
   }
 
+  function setAvailability(available, payload) {
+    // Persistent SDK objects can expire or refill between game load attempts.
+    // Their inventory is independent of a presentation already in progress.
+    state.availabilityManaged = true;
+    if (state.ready === available && !state.loading) return false;
+    clearTimer('loadTimer');
+    state.loading = false;
+    state.ready = available;
+    if (available) callbacks.onLoaded?.(payload);
+    else callbacks.onLoadFailed?.(payload);
+    return true;
+  }
+
   function showFailed(error) {
     if (state.showPhase === 'idle') return false;
     // Once the provider reported presentation, a later error is no longer a
@@ -185,7 +200,7 @@ export function createAdLifecycle({
     clearTimer('presentationTimer');
     clearTimer('dismissalTimer');
     state.showPhase = 'idle';
-    state.ready = false;
+    if (!state.availabilityManaged) state.ready = false;
     callbacks.onShowFailed?.(error);
     return true;
   }
@@ -231,7 +246,7 @@ export function createAdLifecycle({
     clearTimer('dismissalTimer');
     clearTimer('graceTimer');
     state.showPhase = 'idle';
-    state.ready = false;
+    if (!state.availabilityManaged) state.ready = false;
     callbacks.onClosed?.();
     return true;
   }
@@ -281,6 +296,7 @@ export function createAdLifecycle({
     beginLoad,
     loadSucceeded,
     loadFailed,
+    setAvailability,
     beginShow,
     showStarted,
     showFailed,
