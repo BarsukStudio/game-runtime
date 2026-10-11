@@ -201,6 +201,51 @@ if (!isSettledStoreTransaction(transaction, { finishedState, consumable })) {
 The order around it is `purchase-delivery` above: grant the product, write the
 delivery ledger, and only then finish the transaction.
 
+### `@barsuk/game-runtime/purchase-restore-session`
+
+One Restore tap, watched to its real end. `store.restorePurchases()` resolving
+is not an answer: the replayed transactions arrive afterwards as `approved` →
+`verified` → delivery. The session decides only once the call has settled, the
+store has loaded its receipts at least once, no bracketed verification or
+delivery is still running, a quiet period has passed and a minimum observation
+window has elapsed. Extracted from Muscle Clicker, where it carries the device
+fix for iOS password entry: the processing timeout starts only after the store
+call settles, so authentication time never turns into a false `timeout`.
+
+```js
+import {
+  RESTORE_STATUS,
+  createPurchaseRestoreSession,
+} from '@barsuk/game-runtime/purchase-restore-session';
+
+const session = createPurchaseRestoreSession({
+  // Required; a missing one throws at construction.
+  setTimeoutFn: (handler, delayMs) => window.setTimeout(handler, delayMs),
+  clearTimeoutFn: (timer) => window.clearTimeout(timer),
+  // The one entitlement the game restores; which product it is stays here.
+  readEntitlement: () => ({
+    owned: platform.isPurchaseProductOwned(products.removeAds),
+    receiptsLoaded: receiptsReady,
+  }),
+  onWarn: (message, detail) => console.warn(message, detail),
+});
+
+// Report into the session from the purchase flow while it runs:
+// beginActivity/endActivity around verification and delivery, noteDelivered
+// after a real grant, noteError on any failure, noteActivity on store events.
+const { status, owned, deliveredTransactions, error } =
+  await session.run(() => platform.restorePurchases());
+```
+
+- `status` is `restored` when anything was delivered or the store reports the
+  entitlement owned, `failed` on an error with nothing delivered, `timeout` when
+  processing outlasted `timeoutMs` (20 s after the call settled), otherwise
+  `nothing`. A timeout is never reported as "nothing to restore".
+- A call that never settles keeps the session — and the caller's duplicate
+  guard — open: a JS timeout cannot cancel the store's own sync.
+- `toRestoreError(value)` normalises the IError objects
+  `restorePurchases()` resolves with instead of rejecting.
+
 ## Development
 
 ```bash
