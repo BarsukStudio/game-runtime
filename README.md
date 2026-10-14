@@ -278,6 +278,53 @@ const { status, owned, deliveredTransactions, error } =
 - `toRestoreError(value)` normalises the IError objects
   `restorePurchases()` resolves with instead of rejecting.
 
+### `@barsuk/game-runtime/rewarded-request-context`
+
+One rewarded show = one request, decided before the ad opens. Everything the
+grant needs is snapshotted at tap time, because by the time a fullscreen ad
+closes the selected placement and the visible controls may describe a different
+screen. Extracted from Muscle Clicker 2, which carried the starter template's
+copy; Muscle Clicker's copy differed only in ignoring a grant's `false`.
+
+```js
+import { createRewardedRequestCoordinator } from '@barsuk/game-runtime/rewarded-request-context';
+
+const rewardedRequests = createRewardedRequestCoordinator({
+  // Required; a missing one throws at construction. Must not repeat across
+  // launches when the game keeps it as a durable delivery id.
+  createRequestId: () => crypto.randomUUID(),
+  // Return false when the grant was not committed; the next confirmation of the
+  // same request retries it. Any other result counts as granted.
+  onRewardEarned: (request) => grantReward(request.placement, request.payload),
+  // Runs on every terminal outcome, reward or not.
+  onFinalize: (request, outcome) => closeRewardMessage(request.placement),
+  onWarn: (message, detail) => console.warn(message, detail),
+});
+
+if (rewardedRequests.begin({ placement: 'shop_offer', payload: { offerIndex } })) {
+  void platform.showRewardedAd(rewardedRequests.captureReward());
+}
+// From the ad bridge's terminal events:
+rewardedRequests.rewardEarned();
+rewardedRequests.finalize('closed');
+```
+
+- `begin({ placement, payload })` → the request, or `null` while one is in
+  flight. Throws without a placement.
+- `rewardEarned(requestId?)` grants the active request at most once;
+  `captureReward()` returns a confirmation bound to the request active now, which
+  still pays it after the UI finalized and another show began.
+- `finalize(outcome, requestId?)` runs `onFinalize` at most once and releases the
+  coordinator. A passed `requestId` rejects a callback of a request that is no
+  longer active; SDK events carry none, and there the one-terminal-outcome
+  guarantee comes from `ad-lifecycle`.
+- `invalidate()` (a save reset or reload) drops the active request and voids
+  every captured confirmation.
+- A throwing handler is reported through `onWarn` and never wedges the
+  coordinator; a throwing grant counts as granted.
+
+Placements, payloads and amounts stay in the game.
+
 ## Development
 
 ```bash
