@@ -115,6 +115,38 @@ so it belongs only where the later order is actually possible.
 Ad units, placements, reward amounts and the policy about when an ad is
 appropriate stay in the game.
 
+### `@barsuk/game-runtime/purchase-ledger`
+
+The pure half of a delivery journal: transaction ids in delivery order, and the
+operations that keep it. Storage-free — where each half lives, how deep it is and
+what it is written next to stay in the game. Extracted from Muscle Clicker;
+Muscle Clicker 2 and Miner carried the same module byte for byte.
+
+```js
+import {
+  addPurchaseId,
+  mergePurchaseIds,
+  purchaseIdsContain,
+} from '@barsuk/game-runtime/purchase-ledger';
+
+const ledger = mergePurchaseIds(save.deliveredIds, mirror.deliveredIds);
+if (!purchaseIdsContain(ledger, transactionId)) {
+  save.deliveredIds = addPurchaseId(save.deliveredIds, transactionId, SAVE_LIMIT);
+}
+```
+
+- `normalizePurchaseId(value)` → the trimmed id, or `''` for anything that is not
+  a non-empty string.
+- `mergePurchaseIds(...lists)` → a union in delivery order; a repeated id keeps
+  its newest position. Never trims.
+- `limitPurchaseIds(ids, limit)` → the newest `limit` ids. A missing, negative or
+  non-finite limit keeps everything: losing the journal costs a double grant.
+- `purchaseIdsContain(ids, id)` → the replay guard.
+- `addPurchaseId(ids, id, limit)` → one delivery recorded at that half's limit.
+
+The journal is not a cache: an id that falls out of every copy stops guarding its
+transaction, so trimming is always the caller's explicit act.
+
 ### `@barsuk/game-runtime/purchase-delivery`
 
 The order in which one approved-and-verified transaction becomes a delivered
